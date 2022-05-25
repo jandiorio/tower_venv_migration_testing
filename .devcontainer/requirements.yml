@@ -1,0 +1,5 @@
+---
+collections:
+  - name: https://github.com/jandiorio/ee_utilities
+    type: git
+    version: main

@@ -1,0 +1,4 @@
+{
+    "dockerFile": "Dockerfile",
+    "postCreateCommand": "ansible-galaxy collection install -r .devcontainer/requirements.yml"
+}

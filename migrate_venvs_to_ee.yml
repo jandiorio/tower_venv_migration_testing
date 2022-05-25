@@ -1,0 +1,87 @@
+---
+- name: BUILD DELTA DATA FOR VENV MIGRATION
+  hosts: tower
+  become: true
+
+  vars_prompt:
+    - name: venv_migrate_registry_username
+      prompt: "Enter your username for {{ venv_migrate_default_ee_url }}:"
+      private: no
+    - name: venv_migrate_registry_password
+      prompt: "Enter your password for {{ venv_migrate_default_ee_url }}:"
+      private: yes
+
+  tasks:
+    - name: Include venv role
+      include_role:
+        name: jandiorio.ee_utilities.virtualenv_migrate
+
+    # - name: WRITE venv_migrate_ee_python_list TO FILE
+    #   ansible.builtin.copy:
+    #     content: "{{ venv_migrate_ee_python_list }}"
+    #     dest: venv_migration_packages.yml
+
+- name: BUILD EXECUTION ENVIRONMENT CONTAINERS
+  hosts: localhost
+  gather_facts: false
+
+  collections:
+    - containers.podman
+
+  vars:
+    ee_base_image: registry.redhat.io/ansible-automation-platform-21/ee-supported-rhel8:latest
+    # venvs: [
+    #  {
+    #     "/var/lib/awx/venv/atc_core-2_9/": [
+    #     "certifi",
+    #     "netapp-lib",
+    #     "pyvcloud",
+    #     "unittest-xml-reporting",
+    #     "vcd-api-schemas-typedev10"
+    #     ]
+    #  }
+    # ]
+  tasks:
+
+    - name: SET FACT FROM GATHER DATA IN LAST PLAY
+      ansible.builtin.set_fact:
+        venvs: "{{ hostvars['tower']['venv_migrate_ee_python_list'] }}"
+
+    # - name: READ DATA FROM FILE
+    #   ansible.builtin.include_vars:
+    #     file: venv_migration_packages.yml
+    #     name: venvs
+
+    - name: LOOP OVER OUTPUT PYTHONG DATA
+      ansible.builtin.include_role:
+        name: jandiorio.ee_utilities.ee_builder
+      vars:
+        data: "{{ venvs_item | dict2items }}"
+        ee_name: "{{ data.0.key | regex_replace('/var/lib/awx/venv/', '') | regex_replace('/', '') }}"
+        ee_registry_dest: "lab-docker.wwtatc.com:5004/{{ ee_name }}"
+        ee_python: "{{ data.0.value }}"
+      loop: "{{ venvs }}"
+      loop_control:
+        loop_var: venvs_item
+
+      # delete context/*
+      # delete execution_environment.yml
+      # delete python_req
+      # delete requiremets.yml
+      # delete bindep
+
+    - name: CLEANUP LOCAL FILES
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/{{ item }}"
+        state: absent
+      loop:
+        - 'execution_environment.yml'
+        - 'bindep'
+        - 'python_req'
+        - 'requiremets.yml'
+
+    - name: CLEANUP CONTEXT DIR
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/context"
+        state: absent
+
